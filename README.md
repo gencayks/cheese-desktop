@@ -76,6 +76,15 @@ icon (`assets/icon-512.png`, from the Cheese repo). Mouse access still needs
 hidraw udev rules — install `cheese-git` or run Cheese's own
 `scripts/install-linux.sh` — then unplug/replug once.
 
+## Troubleshooting
+
+`The mouse didn't answer control requests`: the firmware is stalling USB
+control transfers even though the descriptor advertises the control
+collection. This is device state, not a broken install — move or click the
+mouse to wake it, check the cable, unplug and replug it, then press Refresh.
+If it persists across replugs and ports, report the mouse model plus the
+`lsusb` line.
+
 GPUI APIs used here are verified against `~/gpui-playground`
 (`crates/gpui/examples/hello_world.rs`, zed rev `72d073d` — the same pin this
 repo builds).
