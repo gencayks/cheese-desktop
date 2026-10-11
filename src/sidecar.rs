@@ -45,6 +45,69 @@ pub fn device_detail(device: &UsbDevice) -> String {
     )
 }
 
+/// Live DPI/polling state of one mouse, as reported by the sidecar drivers.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseSettings {
+    pub dpi: Option<u32>,
+    pub polling_hz: Option<u32>,
+    pub dpi_min: Option<u32>,
+    pub dpi_max: Option<u32>,
+    pub polling_rates: Vec<u32>,
+}
+
+/// Read the current DPI/polling state through the sidecar drivers.
+pub fn mouse_status(
+    node: &str,
+    script: &Path,
+    vid: u16,
+    pid: u16,
+) -> Result<MouseSettings, String> {
+    let payload = format!("{{\"id\":3,\"cmd\":\"status\",\"vid\":{vid},\"pid\":{pid}}}");
+    let reply = transact(node, script, 3, &payload, Duration::from_secs(20))?;
+    parse_settings(&reply)
+}
+
+/// Apply DPI and/or polling rate (each optional), returning the read-back state.
+pub fn mouse_set(
+    node: &str,
+    script: &Path,
+    vid: u16,
+    pid: u16,
+    dpi: Option<u32>,
+    polling_hz: Option<u32>,
+) -> Result<MouseSettings, String> {
+    let mut fields = format!("\"id\":4,\"cmd\":\"set\",\"vid\":{vid},\"pid\":{pid}");
+    if let Some(dpi) = dpi {
+        fields += &format!(",\"dpi\":{dpi}");
+    }
+    if let Some(hz) = polling_hz {
+        fields += &format!(",\"pollingHz\":{hz}");
+    }
+    let reply = transact(
+        node,
+        script,
+        4,
+        &format!("{{{fields}}}"),
+        Duration::from_secs(60),
+    )?;
+    parse_settings(&reply)
+}
+
+fn parse_settings(reply: &serde_json::Value) -> Result<MouseSettings, String> {
+    serde_json::from_value(reply.clone())
+        .map_err(|error| format!("sidecar settings malformed: {error}"))
+}
+
+/// Preset DPI steps offered as buttons, clipped to the mouse's [min, max].
+pub fn dpi_presets(min: Option<u32>, max: Option<u32>) -> Vec<u32> {
+    const PRESETS: [u32; 5] = [400, 800, 1600, 3200, 6400];
+    PRESETS
+        .into_iter()
+        .filter(|preset| min.is_none_or(|lo| *preset >= lo) && max.is_none_or(|hi| *preset <= hi))
+        .collect()
+}
+
 #[derive(Debug, Deserialize)]
 struct TaggedResponse {
     id: Option<u64>,
@@ -75,7 +138,13 @@ pub fn locate_script(explicit: Option<&str>) -> Option<PathBuf> {
 /// Spawn `node <script>`, send one JSON request line over stdio, read the
 /// single-line reply. The child is killed on timeout or protocol mismatch.
 pub fn check_health(node: &str, script: &Path) -> Result<SidecarHealth, String> {
-    let reply = transact(node, script, 1, "{\"id\":1,\"cmd\":\"health\"}")?;
+    let reply = transact(
+        node,
+        script,
+        1,
+        "{\"id\":1,\"cmd\":\"health\"}",
+        HEALTH_TIMEOUT,
+    )?;
     Ok(SidecarHealth {
         sidecar: field(&reply, "sidecar")?,
         node: field(&reply, "node")?,
@@ -90,7 +159,13 @@ pub fn check_health(node: &str, script: &Path) -> Result<SidecarHealth, String> 
 /// Live USB enumeration with catalog annotations; only `known` entries are
 /// supported mice. Errors when lsusb is missing or the sidecar fails.
 pub fn list_devices(node: &str, script: &Path) -> Result<Vec<UsbDevice>, String> {
-    let reply = transact(node, script, 2, "{\"id\":2,\"cmd\":\"devices\"}")?;
+    let reply = transact(
+        node,
+        script,
+        2,
+        "{\"id\":2,\"cmd\":\"devices\"}",
+        HEALTH_TIMEOUT,
+    )?;
     let devices = reply
         .get("devices")
         .ok_or("sidecar devices reply lacks device list")?;
@@ -111,6 +186,7 @@ fn transact(
     script: &Path,
     id: u64,
     payload: &str,
+    timeout: Duration,
 ) -> Result<serde_json::Value, String> {
     let (sender, receiver) = mpsc::channel();
     let script = script.to_path_buf();
@@ -121,12 +197,9 @@ fn transact(
             .send(roundtrip(&node, &script, id, &payload))
             .unwrap_or(());
     });
-    receiver.recv_timeout(HEALTH_TIMEOUT).map_err(|_| {
-        format!(
-            "sidecar request timed out after {}s",
-            HEALTH_TIMEOUT.as_secs()
-        )
-    })?
+    receiver
+        .recv_timeout(timeout)
+        .map_err(|_| format!("sidecar request timed out after {}s", timeout.as_secs()))?
 }
 
 fn roundtrip(
@@ -239,5 +312,42 @@ mod tests {
         for device in &devices {
             assert_eq!(device.known, device.brand.is_some());
         }
+    }
+
+    #[test]
+    fn parse_settings_reads_driver_shape() {
+        let reply: serde_json::Value = serde_json::from_str(
+            r#"{"id":3,"ok":true,"driver":"RazerHidClient","dpi":1600,"pollingHz":1000,
+                "dpiMin":100,"dpiMax":30000,"pollingRates":[125,500,1000]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            parse_settings(&reply).unwrap(),
+            MouseSettings {
+                dpi: Some(1600),
+                polling_hz: Some(1000),
+                dpi_min: Some(100),
+                dpi_max: Some(30000),
+                polling_rates: vec![125, 500, 1000],
+            }
+        );
+    }
+
+    #[test]
+    fn parse_settings_rejects_driver_errors() {
+        let reply: serde_json::Value =
+            serde_json::from_str(r#"{"id":3,"ok":false,"error":"nope"}"#).unwrap();
+        assert!(parse_settings(&reply).is_err());
+    }
+
+    #[test]
+    fn dpi_presets_clip_to_mouse_range() {
+        assert_eq!(
+            dpi_presets(Some(100), Some(30000)),
+            vec![400, 800, 1600, 3200, 6400]
+        );
+        assert_eq!(dpi_presets(Some(100), Some(2000)), vec![400, 800, 1600]);
+        assert_eq!(dpi_presets(None, None), vec![400, 800, 1600, 3200, 6400]);
+        assert!(dpi_presets(Some(9000), Some(30000)).is_empty());
     }
 }

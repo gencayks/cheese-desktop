@@ -6,9 +6,10 @@
   "type": "module",
   "description": "Bundled Node sidecar: runs the @openmouse/protocol mouse drivers for the Cheese Desktop GPUI UI over NDJSON stdio",
   "scripts": {
-    "check": "node --test sidecar.test.mjs"
+    "check": "node --test sidecar.test.mjs mouse.test.mjs"
   },
   "dependencies": {
-    "@openmouse/protocol": "0.31.0"
+    "@openmouse/protocol": "0.31.0",
+    "node-hid": "3.4.0"
   }
 }
