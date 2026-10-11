@@ -7,6 +7,10 @@
 //
 // The process exits when stdin closes. Drivers are NOT ported here in full
 // yet (v1 item 1: spawn + health check only); device enumeration lands next.
+// Drivers run in Node here, but were written for browsers: Razer/Logitech
+// pace their exchanges with window.setTimeout.
+if (typeof window === "undefined") globalThis.window = globalThis;
+
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -14,6 +18,8 @@ import { fileURLToPath } from "node:url";
 import * as protocol from "@openmouse/protocol/drivers/vendors";
 import * as lamzu from "@openmouse/protocol/lamzu";
 import * as razerDevices from "@openmouse/protocol/razer-devices";
+import { createSupportedClient } from "@openmouse/protocol/drivers/registry";
+import { openMouseDevice } from "./usb.mjs";
 
 // package.json is not an exported subpath; reach it via the exported module.
 const vendorsPath = fileURLToPath(await import.meta.resolve("@openmouse/protocol/drivers/vendors"));
@@ -129,34 +135,130 @@ const handlers = {
       ? { ok: true, brand: found.brand, model: found.model, known: true }
       : { ok: true, brand: null, model: null, known: false };
   },
+  status: (request) => mouseCommand(request, readMouse),
+  set: (request) => mouseCommand(request, applyMouse),
 };
 
+/** Open the mouse, run a driver command, always close. Client selection uses
+ * the protocol registry's own auto-detection over the shim's collections. */
+async function mouseCommand(request, command) {
+  const vid = request?.vid;
+  const pid = request?.pid;
+  if (!Number.isInteger(vid) || !Number.isInteger(pid)) {
+    return { ok: false, error: "mouse commands need integer vid and pid" };
+  }
+  let device;
+  try {
+    device = await openMouseDevice(vid, pid);
+  } catch (error) {
+    return { ok: false, error: hintPermissions(error.message) };
+  }
+  try {
+    const client = createSupportedClient(device);
+    if (!client) {
+      return { ok: false, error: `no driver claims 0x${vid.toString(16)}:0x${pid.toString(16)}` };
+    }
+    await client.open();
+    return { ok: true, driver: client.constructor.name, ...(await command(client, request)) };
+  } catch (error) {
+    return { ok: false, error: hintPermissions(error.message) };
+  } finally {
+    await device.close().catch(() => undefined);
+  }
+}
+
+function hintPermissions(message) {
+  if (/permission denied|access denied|not permitted/i.test(message)) {
+    return `${message} (missing udev rules? run the installer from the Cheese repo)`;
+  }
+  return message;
+}
+
+async function readMouse(client) {
+  const status = await client.readStatus();
+  return {
+    dpi: status.dpi ?? null,
+    pollingHz: status.pollingRateHz ?? null,
+    dpiMin: await dpiBound(client, "min"),
+    dpiMax: await dpiBound(client, "max"),
+    pollingRates: await safeRates(client),
+  };
+}
+
+async function applyMouse(client, request) {
+  if (request.dpi !== undefined && request.dpi !== null) await client.setDpi(request.dpi);
+  if (request.pollingHz !== undefined && request.pollingHz !== null) {
+    await client.setPollingRate(request.pollingHz);
+  }
+  return readMouse(client);
+}
+
+async function dpiBound(client, end) {
+  try {
+    const options = await client.getDpiOptions();
+    if (!Array.isArray(options) || options.length === 0) return null;
+    return end === "min" ? options[0] : options[options.length - 1];
+  } catch {
+    return null;
+  }
+}
+
+async function safeRates(client) {
+  try {
+    const rates = await client.getSupportedPollingRates();
+    return Array.isArray(rates) ? rates : [];
+  } catch {
+    return [];
+  }
+}
+
 let buffer = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => {
-  buffer += chunk;
-  let newline;
-  while ((newline = buffer.indexOf("\n")) !== -1) {
-    const line = buffer.slice(0, newline).trim();
-    buffer = buffer.slice(newline + 1);
-    if (!line) continue;
+// The Rust client closes stdin right after its one request; async handlers
+// (status/set) still need event-loop turns afterwards, so exit on stdin end
+// only when no request is in flight — otherwise responses are lost.
+let pending = 0;
+let stdinEnded = false;
+function maybeExit() {
+  if (stdinEnded && pending === 0) process.exit(0);
+}
+async function serve(line) {
+  pending += 1;
+  try {
     let request;
     try {
       request = JSON.parse(line);
     } catch {
       process.stdout.write(`${JSON.stringify({ id: null, ok: false, error: "not JSON" })}\n`);
-      continue;
+      return;
     }
     const handle = handlers[request?.cmd];
     let body;
     try {
       body = handle
-        ? handle(request)
+        ? await handle(request)
         : { ok: false, error: `unknown command ${JSON.stringify(request?.cmd)}` };
     } catch (error) {
       body = { ok: false, error: error.message };
     }
     process.stdout.write(`${JSON.stringify({ id: request?.id ?? null, ...body })}\n`);
+  } finally {
+    pending -= 1;
+    maybeExit();
   }
+}
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let newline;
+  const lines = [];
+  while ((newline = buffer.indexOf("\n")) !== -1) {
+    const line = buffer.slice(0, newline).trim();
+    buffer = buffer.slice(newline + 1);
+    if (line) lines.push(line);
+  }
+  for (const line of lines) void serve(line);
 });
-process.stdin.on("end", () => process.exit(0));
+process.stdin.on("end", () => {
+  stdinEnded = true;
+  maybeExit();
+});

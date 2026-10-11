@@ -37,6 +37,16 @@ cargo run
 The window shows the sidecar health line (`node` + `@openmouse/protocol`
 versions + HID filter count). `CHEESE_SIDECAR` overrides the sidecar path.
 
+## Sidecar protocol
+
+NDJSON over stdio, one request line per process run (`health`, `devices`,
+`resolve`, `status`, `set`). Mouse commands open the best hidraw node for a
+VID:PID through a WebHID-shaped `node-hid` shim (`sidecar/usb.mjs`) and drive
+the protocol registry's own auto-detected drivers — no driver code is ported.
+`status` reads DPI/polling state, `set` applies `dpi` and/or `pollingHz` with
+read-back. Needs `lsusb` (usbutils) for enumeration and hidraw access
+(Cheese udev rules) for control.
+
 ## Check
 
 ```bash
