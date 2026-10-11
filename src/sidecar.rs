@@ -130,7 +130,7 @@ struct TaggedResponse {
 
 /// Locate `sidecar/cheese-sidecar.mjs`: explicit path first, then relative to
 /// the running executable (dev: `target/debug/../../sidecar`, installed:
-/// alongside the binary).
+/// alongside the binary), then the system share dirs (/usr and /usr/local).
 pub fn locate_script(explicit: Option<&str>) -> Option<PathBuf> {
     if let Some(path) = explicit {
         let path = PathBuf::from(path);
@@ -140,12 +140,18 @@ pub fn locate_script(explicit: Option<&str>) -> Option<PathBuf> {
         return None;
     }
     let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    [
+    candidate_paths(&exe_dir)
+        .into_iter()
+        .find(|path| path.is_file())
+}
+
+fn candidate_paths(exe_dir: &Path) -> Vec<PathBuf> {
+    vec![
         exe_dir.join("../../sidecar/cheese-sidecar.mjs"),
         exe_dir.join("sidecar/cheese-sidecar.mjs"),
+        PathBuf::from("/usr/share/cheese-desktop/sidecar/cheese-sidecar.mjs"),
+        PathBuf::from("/usr/local/share/cheese-desktop/sidecar/cheese-sidecar.mjs"),
     ]
-    .into_iter()
-    .find(|path| path.is_file())
 }
 
 /// Spawn `node <script>`, send one JSON request line over stdio, read the
@@ -280,6 +286,20 @@ mod tests {
     fn explicit_script_path_resolves() {
         let path = script();
         assert!(locate_script(Some(&path.to_string_lossy())).is_some());
+    }
+
+    #[test]
+    fn candidate_paths_cover_dev_and_system_layouts() {
+        let exe = PathBuf::from("/repo/target/debug");
+        assert_eq!(
+            candidate_paths(&exe),
+            vec![
+                PathBuf::from("/repo/target/debug/../../sidecar/cheese-sidecar.mjs"),
+                PathBuf::from("/repo/target/debug/sidecar/cheese-sidecar.mjs"),
+                PathBuf::from("/usr/share/cheese-desktop/sidecar/cheese-sidecar.mjs"),
+                PathBuf::from("/usr/local/share/cheese-desktop/sidecar/cheese-sidecar.mjs"),
+            ]
+        );
     }
 
     fn sample_device() -> UsbDevice {

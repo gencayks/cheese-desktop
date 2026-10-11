@@ -1,2 +1,6 @@
 /target/
 sidecar/node_modules/
+distro/aur/src/
+distro/aur/pkg/
+distro/aur/cheese-desktop-git/
+distro/aur/*.pkg.tar.*

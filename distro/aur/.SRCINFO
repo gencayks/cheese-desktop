@@ -1,0 +1,20 @@
+pkgbase = cheese-desktop-git
+	pkgdesc = Cheese Desktop — native Linux companion for configuring supported mice
+	pkgver = 0.1.0.r4.3351cd2
+	pkgrel = 1
+	url = https://github.com/gencayks/cheese-desktop
+	install = cheese-desktop.install
+	arch = x86_64
+	license = AGPL-3.0-or-later
+	makedepends = rust
+	makedepends = nodejs
+	makedepends = npm
+	depends = nodejs
+	depends = usbutils
+	depends = libxkbcommon
+	depends = wayland
+	optdepends = cheese-git: udev rules for hidraw mouse access
+	source = cheese-desktop-git::git+https://github.com/gencayks/cheese-desktop.git#branch=v1-packaging
+	sha256sums = SKIP
+
+pkgname = cheese-desktop-git

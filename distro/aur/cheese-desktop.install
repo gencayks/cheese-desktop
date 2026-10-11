@@ -1,0 +1,10 @@
+post_install() {
+  echo "Cheese Desktop installed. Launch it from your application menu."
+  echo "Mouse access needs hidraw rules (cheese-git provides"
+  echo "/usr/lib/udev/rules.d/70-cheese.rules); then unplug the mouse and"
+  echo "plug it back in before connecting."
+}
+
+post_upgrade() {
+  post_install
+}
