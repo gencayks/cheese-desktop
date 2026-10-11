@@ -1,0 +1,14 @@
+{
+  "name": "cheese-desktop-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "description": "Bundled Node sidecar: runs the @openmouse/protocol mouse drivers for the Cheese Desktop GPUI UI over NDJSON stdio",
+  "scripts": {
+    "check": "node --test sidecar.test.mjs"
+  },
+  "dependencies": {
+    "@openmouse/protocol": "0.31.0"
+  }
+}

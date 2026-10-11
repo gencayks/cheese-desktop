@@ -1,0 +1,14 @@
+[package]
+name = "cheese-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "Native Linux desktop companion to Cheese (GPUI UI, Node sidecar for mouse drivers)"
+license = "AGPL-3.0-or-later"
+
+# Same pinned revision as ~/gpui-playground (rev 72d073d): every GPUI API
+# used here is verified against crates/gpui/examples/hello_world.rs there.
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", rev = "72d073d" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "72d073d", features = ["wayland", "x11"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
