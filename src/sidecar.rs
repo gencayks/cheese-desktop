@@ -69,6 +69,28 @@ pub fn battery_line(settings: &MouseSettings) -> String {
     format!("Battery {percent} · {state}")
 }
 
+/// Translate raw transport/driver failures into actionable lines. Driver
+/// sentences that already explain themselves (asleep/out-of-range, unplugged)
+/// pass through; kernel/driver plumbing leaks get concrete next steps.
+pub fn friendly_settings_error(raw: &str) -> String {
+    let lower = raw.to_lowercase();
+    if lower.contains("broken pipe") {
+        "The mouse didn't answer control requests. Move or click it to wake it, \
+         check the cable, unplug and replug it, then press Refresh."
+            .into()
+    } else if lower.contains("permission denied") {
+        "Permission denied on the device node. Install the hidraw udev rules \
+         (cheese-git package), unplug and replug the mouse, then press Refresh."
+            .into()
+    } else if lower.contains("timed out") {
+        "The mouse didn't reply in time. Wake it with a move or click and press \
+         Refresh; unplug and replug if it keeps happening."
+            .into()
+    } else {
+        raw.into()
+    }
+}
+
 /// Read the current DPI/polling state through the sidecar drivers.
 pub fn mouse_status(
     node: &str,
@@ -394,6 +416,35 @@ mod tests {
             ..bare.clone()
         };
         assert_eq!(battery_line(&charged), "Battery 100% · Charging");
+    }
+
+    #[test]
+    fn friendly_settings_error_maps_plumbing_to_actions() {
+        assert_eq!(
+            friendly_settings_error(
+                "could not get feature report from device: ioctl (GFEATURE): Broken pipe"
+            ),
+            "The mouse didn't answer control requests. Move or click it to wake it, \
+             check the cable, unplug and replug it, then press Refresh."
+        );
+        assert_eq!(
+            friendly_settings_error("cannot open 0x1532:0xa5: Permission denied"),
+            "Permission denied on the device node. Install the hidraw udev rules \
+             (cheese-git package), unplug and replug the mouse, then press Refresh."
+        );
+        assert_eq!(
+            friendly_settings_error("sidecar request timed out after 20s"),
+            "The mouse didn't reply in time. Wake it with a move or click and press \
+             Refresh; unplug and replug if it keeps happening."
+        );
+        assert_eq!(
+            friendly_settings_error("The mouse stayed busy — it may be asleep or out of range."),
+            "The mouse stayed busy — it may be asleep or out of range."
+        );
+        assert_eq!(
+            friendly_settings_error("no HID device 0x1532:0xa5 (is it plugged in?)"),
+            "no HID device 0x1532:0xa5 (is it plugged in?)"
+        );
     }
 
     #[test]

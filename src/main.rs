@@ -184,86 +184,83 @@ impl CheeseDesktop {
         let pid = device.pid;
         let title = sidecar::device_title(device);
         let error = self.settings_error.clone();
-        let body = match &self.settings {
-            None if error.is_none() => div()
-                .text_sm()
-                .text_color(rgb(0xa0a0a8))
-                .child("Reading settings…"),
-            None => div()
-                .text_sm()
-                .text_color(rgb(0xe2686f))
-                .child(error.clone().unwrap_or_default()),
-            Some(settings) => {
-                let dpi = settings
-                    .dpi
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| "–".into());
-                let polling = settings
-                    .polling_hz
-                    .map(|value| format!("{value} Hz"))
-                    .unwrap_or_else(|| "–".into());
-                let presets = sidecar::dpi_presets(settings.dpi_min, settings.dpi_max);
-                let rates = settings.polling_rates.clone();
-                let current_dpi = settings.dpi;
-                let current_rate = settings.polling_hz;
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(0xffffff))
-                            .child(format!("DPI {dpi} · polling {polling}")),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(0xa0a0a8))
-                            .child(sidecar::battery_line(settings)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_2()
-                            .children(presets.into_iter().map(|preset| {
-                                let active = current_dpi == Some(preset);
-                                div()
-                                    .id(("dpi", preset))
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(move |view, _, _, cx| {
-                                        view.apply(vid, pid, Some(preset), None);
-                                        cx.notify();
-                                    }))
-                                    .child(option_button(preset.to_string(), active))
-                            })),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_2()
-                            .children(rates.into_iter().map(|rate| {
-                                let active = current_rate == Some(rate);
-                                div()
-                                    .id(("polling", rate))
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(move |view, _, _, cx| {
-                                        view.apply(vid, pid, None, Some(rate));
-                                        cx.notify();
-                                    }))
-                                    .child(option_button(format!("{rate} Hz"), active))
-                            })),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(0xe2686f))
-                            .child(error.unwrap_or_default()),
-                    )
-            }
-        };
+        let body =
+            match &self.settings {
+                None if error.is_none() => div()
+                    .text_sm()
+                    .text_color(rgb(0xa0a0a8))
+                    .child("Reading settings…"),
+                None => div().text_sm().text_color(rgb(0xe2686f)).child(
+                    sidecar::friendly_settings_error(error.as_deref().unwrap_or("")),
+                ),
+                Some(settings) => {
+                    let dpi = settings
+                        .dpi
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "–".into());
+                    let polling = settings
+                        .polling_hz
+                        .map(|value| format!("{value} Hz"))
+                        .unwrap_or_else(|| "–".into());
+                    let presets = sidecar::dpi_presets(settings.dpi_min, settings.dpi_max);
+                    let rates = settings.polling_rates.clone();
+                    let current_dpi = settings.dpi;
+                    let current_rate = settings.polling_hz;
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0xffffff))
+                                .child(format!("DPI {dpi} · polling {polling}")),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0xa0a0a8))
+                                .child(sidecar::battery_line(settings)),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_2()
+                                .children(presets.into_iter().map(|preset| {
+                                    let active = current_dpi == Some(preset);
+                                    div()
+                                        .id(("dpi", preset))
+                                        .cursor_pointer()
+                                        .on_click(cx.listener(move |view, _, _, cx| {
+                                            view.apply(vid, pid, Some(preset), None);
+                                            cx.notify();
+                                        }))
+                                        .child(option_button(preset.to_string(), active))
+                                })),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_2()
+                                .children(rates.into_iter().map(|rate| {
+                                    let active = current_rate == Some(rate);
+                                    div()
+                                        .id(("polling", rate))
+                                        .cursor_pointer()
+                                        .on_click(cx.listener(move |view, _, _, cx| {
+                                            view.apply(vid, pid, None, Some(rate));
+                                            cx.notify();
+                                        }))
+                                        .child(option_button(format!("{rate} Hz"), active))
+                                })),
+                        )
+                        .child(div().text_sm().text_color(rgb(0xe2686f)).child(
+                            sidecar::friendly_settings_error(error.as_deref().unwrap_or("")),
+                        ))
+                }
+            };
         div()
             .w_full()
             .flex()
