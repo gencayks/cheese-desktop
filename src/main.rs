@@ -218,6 +218,12 @@ impl CheeseDesktop {
                     )
                     .child(
                         div()
+                            .text_sm()
+                            .text_color(rgb(0xa0a0a8))
+                            .child(sidecar::battery_line(settings)),
+                    )
+                    .child(
+                        div()
                             .flex()
                             .flex_wrap()
                             .gap_2()

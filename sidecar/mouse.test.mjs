@@ -18,7 +18,7 @@ import {
   razerSetDpiCommand,
 } from "@openmouse/protocol/razer";
 import { withSoftwareId } from "@openmouse/protocol/logitech";
-import { pickEntry, NodeWebHidDevice } from "./usb.mjs";
+import { pickEntry, summarizeStatus, NodeWebHidDevice } from "./usb.mjs";
 
 const collection = (usagePage, usage) => ({
   usagePage,
@@ -200,4 +200,31 @@ test("pickEntry prefers the HID++ short-report collection", () => {
   assert.equal(pickEntry([mouse, other]), other);
   assert.equal(pickEntry([mouse]), mouse);
   assert.equal(pickEntry([]), null);
+});
+
+test("summarizeStatus maps both families' battery fields", () => {
+  assert.deepEqual(
+    summarizeStatus(
+      { dpi: 1600, pollingRateHz: 1000, batteryPercent: 92, batteryState: "Discharging" },
+      { dpiMin: 100, dpiMax: 30000, pollingRates: [125, 500, 1000] },
+    ),
+    {
+      dpi: 1600,
+      pollingHz: 1000,
+      batteryPercent: 92,
+      batteryState: "Discharging",
+      dpiMin: 100,
+      dpiMax: 30000,
+      pollingRates: [125, 500, 1000],
+    },
+  );
+  assert.deepEqual(summarizeStatus({ dpi: 800 }, {}), {
+    dpi: 800,
+    pollingHz: null,
+    batteryPercent: null,
+    batteryState: "Unknown",
+    dpiMin: null,
+    dpiMax: null,
+    pollingRates: [],
+  });
 });

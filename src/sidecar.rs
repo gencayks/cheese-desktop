@@ -54,6 +54,19 @@ pub struct MouseSettings {
     pub dpi_min: Option<u32>,
     pub dpi_max: Option<u32>,
     pub polling_rates: Vec<u32>,
+    pub battery_percent: Option<u32>,
+    pub battery_state: Option<String>,
+}
+
+/// Battery status line: percent plus driver-reported state, graceful when the
+/// mouse reports neither (wired mice, unreadable state).
+pub fn battery_line(settings: &MouseSettings) -> String {
+    let percent = settings
+        .battery_percent
+        .map(|value| format!("{value}%"))
+        .unwrap_or_else(|| "–".into());
+    let state = settings.battery_state.as_deref().unwrap_or("Unknown");
+    format!("Battery {percent} · {state}")
 }
 
 /// Read the current DPI/polling state through the sidecar drivers.
@@ -318,7 +331,8 @@ mod tests {
     fn parse_settings_reads_driver_shape() {
         let reply: serde_json::Value = serde_json::from_str(
             r#"{"id":3,"ok":true,"driver":"RazerHidClient","dpi":1600,"pollingHz":1000,
-                "dpiMin":100,"dpiMax":30000,"pollingRates":[125,500,1000]}"#,
+                "dpiMin":100,"dpiMax":30000,"pollingRates":[125,500,1000],
+                "batteryPercent":92,"batteryState":"Discharging"}"#,
         )
         .unwrap();
         assert_eq!(
@@ -329,6 +343,8 @@ mod tests {
                 dpi_min: Some(100),
                 dpi_max: Some(30000),
                 polling_rates: vec![125, 500, 1000],
+                battery_percent: Some(92),
+                battery_state: Some("Discharging".into()),
             }
         );
     }
@@ -338,6 +354,26 @@ mod tests {
         let reply: serde_json::Value =
             serde_json::from_str(r#"{"id":3,"ok":false,"error":"nope"}"#).unwrap();
         assert!(parse_settings(&reply).is_err());
+    }
+
+    #[test]
+    fn battery_line_graceful_without_data() {
+        let bare = MouseSettings {
+            dpi: None,
+            polling_hz: None,
+            dpi_min: None,
+            dpi_max: None,
+            polling_rates: Vec::new(),
+            battery_percent: None,
+            battery_state: None,
+        };
+        assert_eq!(battery_line(&bare), "Battery – · Unknown");
+        let charged = MouseSettings {
+            battery_percent: Some(100),
+            battery_state: Some("Charging".into()),
+            ..bare.clone()
+        };
+        assert_eq!(battery_line(&charged), "Battery 100% · Charging");
     }
 
     #[test]

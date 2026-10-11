@@ -135,6 +135,20 @@ export class NodeWebHidDevice {
   }
 }
 
+/** Reduce a driver readStatus to the settings surface. Pure — unit-tested
+ * with canned statuses from both families. */
+export function summarizeStatus(status, extras = {}) {
+  return {
+    dpi: status.dpi ?? null,
+    pollingHz: status.pollingRateHz ?? null,
+    batteryPercent: status.batteryPercent ?? null,
+    batteryState: status.batteryState ?? "Unknown",
+    dpiMin: extras.dpiMin ?? null,
+    dpiMax: extras.dpiMax ?? null,
+    pollingRates: extras.pollingRates ?? [],
+  };
+}
+
 /** Open the best hidraw node for a VID:PID. Throws when nothing matches
  * (unplugged) or the OS denies access (missing udev rules). */
 export async function openMouseDevice(vid, pid) {

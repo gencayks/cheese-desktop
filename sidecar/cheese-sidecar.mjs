@@ -176,13 +176,11 @@ function hintPermissions(message) {
 
 async function readMouse(client) {
   const status = await client.readStatus();
-  return {
-    dpi: status.dpi ?? null,
-    pollingHz: status.pollingRateHz ?? null,
+  return summarizeStatus(status, {
     dpiMin: await dpiBound(client, "min"),
     dpiMax: await dpiBound(client, "max"),
     pollingRates: await safeRates(client),
-  };
+  });
 }
 
 async function applyMouse(client, request) {
