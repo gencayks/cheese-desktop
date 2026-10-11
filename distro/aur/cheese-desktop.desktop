@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Cheese Desktop
+Comment=Configure a supported mouse (native app)
+Exec=cheese-desktop
+Icon=cheese-desktop
+Terminal=false
+Categories=Settings;HardwareSettings;

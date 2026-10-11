@@ -56,6 +56,26 @@ cargo test
 cd sidecar && npm run check
 ```
 
+## Install (Linux packaging)
+
+Arch (AUR pattern, same shape as cheese-git):
+
+```bash
+cd distro/aur && makepkg -si
+```
+
+or by hand (default `PREFIX=/usr/local`):
+
+```bash
+sudo ./scripts/install-linux.sh
+```
+
+This installs `/usr/bin/cheese-desktop` (or `$PREFIX/bin`), the sidecar tree
+under `$PREFIX/share/cheese-desktop`, the desktop entry, and the cheese-wedge
+icon (`assets/icon-512.png`, from the Cheese repo). Mouse access still needs
+hidraw udev rules — install `cheese-git` or run Cheese's own
+`scripts/install-linux.sh` — then unplug/replug once.
+
 GPUI APIs used here are verified against `~/gpui-playground`
 (`crates/gpui/examples/hello_world.rs`, zed rev `72d073d` — the same pin this
 repo builds).

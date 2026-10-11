@@ -1,0 +1,41 @@
+# Maintainer: gencayks
+# NOTE: tracks the v1 stack branch until it merges — then point the source
+# at main (and drop the -git suffix if a release is tagged).
+pkgname=cheese-desktop-git
+pkgver=0.1.0.r4.3351cd2
+pkgrel=1
+pkgdesc="Cheese Desktop — native Linux companion for configuring supported mice"
+arch=('x86_64')
+url="https://github.com/gencayks/cheese-desktop"
+license=('AGPL-3.0-or-later')
+depends=('nodejs' 'usbutils' 'libxkbcommon' 'wayland')
+makedepends=('rust' 'nodejs' 'npm')
+optdepends=('cheese-git: udev rules for hidraw mouse access')
+source=("${pkgname}::git+${url}.git#branch=v1-packaging")
+sha256sums=('SKIP')
+install=cheese-desktop.install
+
+pkgver() {
+  cd "${pkgname}"
+  printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "${pkgname}"
+  cargo build --release --locked
+  cd sidecar
+  npm ci --no-audit --no-fund
+}
+
+package() {
+  cd "${pkgname}"
+  install -Dm755 target/release/cheese-desktop "${pkgdir}/usr/bin/cheese-desktop"
+  install -dm755 "${pkgdir}/usr/share/cheese-desktop/sidecar"
+  cp -r sidecar/cheese-sidecar.mjs sidecar/usb.mjs sidecar/package.json \
+    sidecar/node_modules "${pkgdir}/usr/share/cheese-desktop/sidecar/"
+  install -Dm644 distro/aur/cheese-desktop.desktop \
+    "${pkgdir}/usr/share/applications/cheese-desktop.desktop"
+  install -Dm644 assets/icon-512.png \
+    "${pkgdir}/usr/share/icons/hicolor/512x512/apps/cheese-desktop.png"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
